@@ -1,0 +1,145 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Library Management System</title>
+<style>
+body{margin:0;font-family:Arial;background:#f1f5f9;color:#17365d}
+header{background:#12345a;color:white;padding:22px}
+nav{background:white;padding:12px;display:flex;gap:10px;flex-wrap:wrap}
+button{padding:10px 15px;background:#1769aa;color:white;border:0;border-radius:6px;cursor:pointer}
+button:hover{background:#0c4f85}
+main{padding:22px}
+.card{background:white;padding:18px;border-radius:10px;margin:12px 0;box-shadow:0 2px 8px #ccd5df}
+input,select{padding:10px;margin:5px;border:1px solid #ccd5df;border-radius:5px;max-width:95%}
+table{width:100%;border-collapse:collapse;background:white}
+th,td{padding:11px;border-bottom:1px solid #ddd;text-align:left}
+th{background:#e3edf7}
+.hidden{display:none}
+</style>
+</head>
+<body>
+<div id="login" class="card" style="max-width:360px;margin:70px auto">
+<h2>📚 Library Admin Login</h2>
+<input id="username" placeholder="Username" value="admin"><br>
+<input id="password" type="password" placeholder="Password"><br>
+<button onclick="login()">Login</button>
+<p id="error" style="color:red"></p>
+<p>Demo: admin / admin123</p>
+</div>
+
+<div id="app" class="hidden">
+<header>
+<h1>📚 Library Management System</h1>
+<p>Manage books, members and transactions</p>
+</header>
+<nav>
+<button onclick="page('dashboard')">Dashboard</button>
+<button onclick="page('books')">Books</button>
+<button onclick="page('members')">Members</button>
+<button onclick="page('issues')">Issue / Return</button>
+<button onclick="page('reports')">Reports</button>
+<button onclick="logout()">Logout</button>
+</nav>
+<main id="content"></main>
+</div>
+
+<script>
+const KEY="librarySystemData";
+let data;
+try{data=JSON.parse(localStorage.getItem(KEY))}catch(e){}
+if(!data)data={
+books:[
+{id:1,title:"The Alchemist",author:"Paulo Coelho",category:"Fiction",copies:3},
+{id:2,title:"Wings of Fire",author:"A. P. J. Abdul Kalam",category:"Biography",copies:4},
+{id:3,title:"Python Crash Course",author:"Eric Matthes",category:"Programming",copies:2}
+],
+members:[{id:1,name:"Rahul Sharma",email:"rahul@example.com",phone:"9876543210"}],
+issues:[],nextBook:4,nextMember:2,nextIssue:1
+};
+function save(){localStorage.setItem(KEY,JSON.stringify(data))}
+function login(){
+if(document.getElementById('username').value==='admin'&&document.getElementById('password').value==='admin123'){
+document.getElementById('login').classList.add('hidden');
+document.getElementById('app').classList.remove('hidden');page('dashboard')
+}else document.getElementById('error').textContent='Incorrect login details';
+}
+function logout(){document.getElementById('app').classList.add('hidden');document.getElementById('login').classList.remove('hidden')}
+function el(id){return document.getElementById(id)}
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function today(){return new Date().toISOString().slice(0,10)}
+function due(){let d=new Date();d.setDate(d.getDate()+14);return d.toISOString().slice(0,10)}
+function book(id){return data.books.find(x=>x.id===Number(id))}
+function member(id){return data.members.find(x=>x.id===Number(id))}
+function active(){return data.issues.filter(x=>!x.returnDate)}
+function table(headers,rows){return '<div style="overflow:auto"><table><tr>'+headers.map(x=>'<th>'+x+'</th>').join('')+'</tr>'+(rows.length?rows.join(''):'<tr><td colspan="'+headers.length+'">No records yet</td></tr>')+'</table></div>'}
+function page(p){
+let c=el('content');
+if(p==='dashboard'){
+c.innerHTML='<h2>Dashboard</h2><div class="card">Book titles: '+data.books.length+' | Available copies: '+data.books.reduce((s,b)=>s+b.copies,0)+' | Members: '+data.members.length+' | Currently issued: '+active().length+'</div><div class="card"><h3>Welcome to your library</h3>Use the menu to manage your records.</div>';
+}
+if(p==='books'){
+c.innerHTML='<h2>Books</h2><div class="card"><h3>Add Book</h3><input id="bt" placeholder="Book title"><input id="ba" placeholder="Author"><input id="bc" placeholder="Category"><input id="bn" type="number" min="0" value="1" placeholder="Copies"><button onclick="addBook()">Add Book</button></div><div class="card" id="booklist"></div>';
+drawBooks();
+}
+if(p==='members'){
+c.innerHTML='<h2>Members</h2><div class="card"><input id="mn" placeholder="Full name"><input id="me" placeholder="Email"><input id="mp" placeholder="Phone"><button onclick="addMember()">Register Member</button></div><div class="card" id="memberlist"></div>';
+drawMembers();
+}
+if(p==='issues'){
+c.innerHTML='<h2>Issue / Return Books</h2><div class="card"><h3>Issue Book (14 days)</h3><label>Book </label><select id="ib">'+data.books.filter(b=>b.copies>0).map(b=>'<option value="'+b.id+'">'+esc(b.title)+' ('+b.copies+' available)</option>').join('')+'</select><label>Member </label><select id="im">'+data.members.map(m=>'<option value="'+m.id+'">'+esc(m.name)+'</option>').join('')+'</select><button onclick="issueBook()">Issue Book</button></div><div class="card" id="issuelist"></div>';
+drawIssues();
+}
+if(p==='reports'){
+c.innerHTML='<h2>Reports</h2><div class="card"><button onclick="exportCSV()">Export CSV</button><div id="reportlist"></div></div>';
+el('reportlist').innerHTML=table(['Issue ID','Book','Member','Issue Date','Due Date','Return Date','Fine'],data.issues.map(i=>'<tr><td>'+i.id+'</td><td>'+esc(book(i.bookId)?.title)+'</td><td>'+esc(member(i.memberId)?.name)+'</td><td>'+i.issueDate+'</td><td>'+i.dueDate+'</td><td>'+(i.returnDate||'Not returned')+'</td><td>₹'+i.fine+'</td></tr>'));
+}
+}
+function addBook(){
+let title=el('bt').value.trim(),author=el('ba').value.trim();
+if(!title||!author)return alert('Enter title and author');
+data.books.push({id:data.nextBook++,title,author,category:el('bc').value,copies:Math.max(0,Number(el('bn').value))});
+save();page('books')
+}
+function drawBooks(){
+el('booklist').innerHTML=table(['ID','Title','Author','Category','Available'],data.books.map(b=>'<tr><td>'+b.id+'</td><td>'+esc(b.title)+'</td><td>'+esc(b.author)+'</td><td>'+esc(b.category)+'</td><td>'+b.copies+'</td></tr>'))
+}
+function addMember(){
+let name=el('mn').value.trim(),email=el('me').value.trim(),phone=el('mp').value.trim();
+if(!name)return alert('Enter member name');
+if(email&&data.members.some(m=>m.email.toLowerCase()===email.toLowerCase()))return alert('Email already registered');
+data.members.push({id:data.nextMember++,name,email,phone});save();page('members')
+}
+function drawMembers(){
+el('memberlist').innerHTML=table(['ID','Name','Email','Phone','Action'],data.members.map(m=>'<tr><td>'+m.id+'</td><td>'+esc(m.name)+'</td><td>'+esc(m.email)+'</td><td>'+esc(m.phone)+'</td><td><button onclick="deleteMember('+m.id+')">Delete</button></td></tr>'))
+}
+function deleteMember(id){
+if(data.issues.some(i=>i.memberId===id&&!i.returnDate))return alert('Return all books issued to this member before deleting.');
+if(confirm('Delete this member and their issue history?')){data.members=data.members.filter(m=>m.id!==id);data.issues=data.issues.filter(i=>i.memberId!==id);save();page('members')}
+}
+function issueBook(){
+let b=book(el('ib').value),m=member(el('im').value);
+if(!b||!m||b.copies<1)return alert('Select an available book and member');
+b.copies--;
+data.issues.push({id:data.nextIssue++,bookId:b.id,memberId:m.id,issueDate:today(),dueDate:due(),returnDate:null,fine:0});
+save();page('issues')
+}
+function drawIssues(){
+el('issuelist').innerHTML=table(['ID','Book','Member','Issue Date','Due Date','Status','Action'],active().map(i=>'<tr><td>'+i.id+'</td><td>'+esc(book(i.bookId)?.title)+'</td><td>'+esc(member(i.memberId)?.name)+'</td><td>'+i.issueDate+'</td><td>'+i.dueDate+'</td><td>'+(i.dueDate<today()?'Overdue':'Issued')+'</td><td><button onclick="returnBook('+i.id+')">Return</button></td></tr>'))
+}
+function returnBook(id){
+let i=data.issues.find(x=>x.id===id&&!x.returnDate);if(!i)return;
+let late=Math.max(0,Math.floor((new Date(today())-new Date(i.dueDate))/86400000));
+i.returnDate=today();i.fine=late*5;book(i.bookId).copies++;save();page('issues');alert('Book returned. Fine: ₹'+i.fine)
+}
+function exportCSV(){
+let rows=[['Issue ID','Book','Member','Issue Date','Due Date','Return Date','Fine'],...data.issues.map(i=>[i.id,book(i.bookId)?.title,member(i.memberId)?.name,i.issueDate,i.dueDate,i.returnDate||'',i.fine])];
+let csv=rows.map(r=>r.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(',')).join('\r\n');
+let a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download='library-report.csv';a.click();URL.revokeObjectURL(a.href)
+}
+save();
+</script>
+</body>
+</html>
